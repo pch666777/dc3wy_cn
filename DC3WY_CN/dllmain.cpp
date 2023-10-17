@@ -4,8 +4,8 @@
 #include <windows.h>
 #include <fstream>
 #include <vector>
-#include "detours.h"
 #include "dc3wy.h"
+#include "detours.h"
 #pragma comment(lib, "detours.lib")
 
 namespace Hook::Mem {
