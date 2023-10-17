@@ -38,10 +38,10 @@ namespace Hook::Type {
 
 namespace Hook::Val {
     DWORD BaseAddr;
-    std::string replacePathA;
-    std::wstring replacePathW;
-    std::vector<Type::Font*> fonts;
-    HMODULE gdi32_dll, kernel32_dll;
+    std::string ReplacePathA;
+    std::wstring ReplacePathW;
+    std::vector<Type::Font*> Fonts;
+    HMODULE GDI32_DLL, KERNEL32_DLL;
 }
 
 namespace Hook::Def {
@@ -49,25 +49,25 @@ namespace Hook::Def {
     Type::Font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
         GetTextMetricsA(hdc, &lptm);
         size_t size = (size_t)lptm.tmHeight;
-        for (Type::Font* f : Val::fonts) if (f->size == size) return f;
+        for (Type::Font* f : Val::Fonts) if (f->size == size) return f;
         Type::Font* nf = new Type::Font{ nullptr, nullptr, size };
         nf->gbk_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x86, 4, 0x20, 4, 4, "黑体");
         nf->jis_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x80, 4, 0x20, 4, 4, "黑体");
-        Val::fonts.push_back(nf);
+        Val::Fonts.push_back(nf);
         return nf;
     }
 
     bool ReplacePathW(std::wstring path) {
         path.assign(path.substr(path.find_last_of(L"\\") + 1)).insert(0, L"cn_Data\\");
         if(GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-        Val::replacePathW.assign(path);
+        Val::ReplacePathW.assign(path);
         return true;
     }
 
     bool ReplacePathA(std::string path) {
         path.assign(path.substr(path.find_last_of("\\") + 1)).insert(0, "cn_Data\\");
         if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-        Val::replacePathA.assign(path);
+        Val::ReplacePathA.assign(path);
         return true;
     }
 }
@@ -91,38 +91,38 @@ namespace Hook::Fun {
 
     Type::FindFirstFileA OldFindFirstFileA;
     HANDLE WINAPI NewFindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData) {
-        return OldFindFirstFileA(Def::ReplacePathA(lpFileName) ? Val::replacePathA.c_str() : lpFileName, lpFindFileData);
+        return OldFindFirstFileA(Def::ReplacePathA(lpFileName) ? Val::ReplacePathA.c_str() : lpFileName, lpFindFileData);
     }
 
     Type::CreateFileA OldCreateFileA;
     HANDLE WINAPI NewCreateFileA(LPCSTR lpFN, DWORD dwDA, DWORD dwSM, LPSECURITY_ATTRIBUTES lpSA, DWORD dwCD, DWORD dwFAA, HANDLE hTF) {
-        return OldCreateFileA(Def::ReplacePathA(lpFN) ? Val::replacePathA.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
+        return OldCreateFileA(Def::ReplacePathA(lpFN) ? Val::ReplacePathA.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
     }
 
     Type::CreateFileW OldCreateFileW;
     HANDLE WINAPI NewCreateFileW(LPCWSTR lpFN, DWORD dwDA, DWORD dwSM, LPSECURITY_ATTRIBUTES lpSA, DWORD dwCD, DWORD dwFAA, HANDLE hTF) {
-        return OldCreateFileW(Def::ReplacePathW(lpFN) ? Val::replacePathW.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
+        return OldCreateFileW(Def::ReplacePathW(lpFN) ? Val::ReplacePathW.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
     }
 }
 
 namespace Hook {
 
-    void init() {
+    void Init() {
         Val::BaseAddr = (DWORD)GetModuleHandle(NULL);
-        Mem::MemWrite(Val::BaseAddr + 0x0E8DB, (void*)&Dc3wy::wTitle_name, 4);
-        Mem::MemWrite(Val::BaseAddr + 0x0DABF, (void*)&Dc3wy::description, 4);
-        Mem::MemWrite(Val::BaseAddr + 0x9DF58, Dc3wy::chapter_titles, sizeof(Dc3wy::chapter_titles));
-        if (Val::gdi32_dll = GetModuleHandleA("gdi32.dll")) {
-            Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(Val::gdi32_dll, "GetGlyphOutlineA");
+        Mem::MemWrite(Val::BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 4);
+        Mem::MemWrite(Val::BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
+        Mem::MemWrite(Val::BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
+        if (Val::GDI32_DLL = GetModuleHandleA("gdi32.dll")) {
+            Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(Val::GDI32_DLL, "GetGlyphOutlineA");
         }
-        if (Val::kernel32_dll = GetModuleHandleA("kernel32.dll")) {
-            Fun::OldFindFirstFileA = (Type::FindFirstFileA)GetProcAddress(Val::kernel32_dll, "FindFirstFileA");
-            Fun::OldCreateFileA = (Type::CreateFileA)GetProcAddress(Val::kernel32_dll, "CreateFileA");
-            Fun::OldCreateFileW = (Type::CreateFileW)GetProcAddress(Val::kernel32_dll, "CreateFileW");
+        if (Val::KERNEL32_DLL = GetModuleHandleA("kernel32.dll")) {
+            Fun::OldFindFirstFileA = (Type::FindFirstFileA)GetProcAddress(Val::KERNEL32_DLL, "FindFirstFileA");
+            Fun::OldCreateFileA = (Type::CreateFileA)GetProcAddress(Val::KERNEL32_DLL, "CreateFileA");
+            Fun::OldCreateFileW = (Type::CreateFileW)GetProcAddress(Val::KERNEL32_DLL, "CreateFileW");
         }
     }
 
-    void start() {
+    void Start() {
         DetourTransactionBegin();
         if (Fun::OldGetGlyphOutlineA) {
             DetourAttach((void**)&Fun::OldGetGlyphOutlineA, Fun::NewGetGlyphOutlineA);
@@ -151,8 +151,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
         freopen("CONOUT$", "w", stdout);
         freopen("CONIN$", "r", stdin);
     #endif
-        Hook::init();
-        Hook::start();
+        Hook::Init();
+        Hook::Start();
         break;
     case DLL_THREAD_ATTACH:
     case DLL_THREAD_DETACH:
