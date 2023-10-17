@@ -134,7 +134,6 @@ namespace Hook {
         if (fun::OldCreateFileA) {
             DetourAttach((void**)&fun::OldCreateFileA, fun::NewCreateFileA);
         }
-
         if (fun::OldCreateFileW) {
             DetourAttach((void**)&fun::OldCreateFileW, fun::NewCreateFileW);
         }
