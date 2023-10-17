@@ -11,8 +11,7 @@
 namespace Hook::Mem {
 
     bool MemWrite(uintptr_t Addr, void* Buf, size_t Size) {
-        DWORD OldPro;
-        SIZE_T wirteBytes = 0;
+        DWORD OldPro = NULL; SIZE_T wirteBytes = NULL;
         if (VirtualProtect((VOID*)Addr, Size, PAGE_EXECUTE_READWRITE, &OldPro)) {
             WriteProcessMemory(INVALID_HANDLE_VALUE, (VOID*)Addr, Buf, Size, &wirteBytes);
             VirtualProtect((VOID*)Addr, Size, OldPro, &OldPro);
