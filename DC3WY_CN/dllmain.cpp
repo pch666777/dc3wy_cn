@@ -1,157 +1,166 @@
-﻿#include "framework.h"
+﻿#define _CRT_SECURE_NO_WARNINGS
+#define WIN32_LEAN_AND_MEAN
+#include <iostream>
+#include <windows.h>
+#include <fstream>
+#include <vector>
+#include "detours.h"
 #include "dc3wy.h"
+#pragma comment(lib, "detours.lib")
 
-string szWndName ("【-COKEZIGE汉化组-】Da Capo Ⅲ With You - ");
-string verData ("");
+namespace Hook::Mem {
 
-HWND WINAPI NewCreateWindowExA(DWORD dwExStyle, LPCTSTR lpClassName, LPCTSTR lpWindowName, DWORD dwStyle, 
-    int x, int y, int nWidth, int nHeight, HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam){
-    return oldCreateWindowExA(dwExStyle, lpClassName, (LPCTSTR)szWndName.c_str(),
-        dwStyle, x, y, nWidth, nHeight, hWndParent, hMenu, hInstance, lpParam);
-}
-
-HFONT WINAPI newCreateFontIndirectA(LOGFONTA* lplf) {
-    lplf->lfCharSet = 0x86;
-    strcpy_s(lplf->lfFaceName, "黑体");
-    return oldCreateFontIndirectA(lplf);
-}
-
-HANDLE WINAPI NewCreateFileA(LPCSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
-    LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
-    DWORD dwFlagsAndAttributes, HANDLE hTemplateFile){
-    string newName(lpFileName);
-    ReplacePathA(&newName);
-    return oldCreateFileA(
-        newName.c_str(),  dwDesiredAccess, dwShareMode, lpSecurityAttributes,
-        dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
-}
-
-HANDLE WINAPI newCreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
-    LPSECURITY_ATTRIBUTES lpSecurityAttributes,DWORD dwCreationDisposition,
-    DWORD dwFlagsAndAttributes,HANDLE hTemplateFile) {
-    wstring newName(lpFileName);
-    ReplacePathW(&newName);
-    return oldCreateFileW(
-            newName.c_str(), dwDesiredAccess, dwShareMode, lpSecurityAttributes,
-            dwCreationDisposition, dwFlagsAndAttributes, hTemplateFile);
-};
-
-HANDLE WINAPI NewFindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData) {
-    string newName(lpFileName);
-    ReplacePathA(&newName);
-    return oldFindFirstFileA(newName.c_str(), lpFindFileData);
-}
-
-HANDLE WINAPI newMessageBoxA(HWND hWnd, LPCSTR lpText, LPCSTR lpCaption, UINT uType) {
-    if (lpText != 0 && strcmp((const char*)lpText, (const char*)"廔椆偟傑偡偐丠") == 0)
-        return oldMessageBoxA(hWnd, "要结束游戏吗？", "提示", uType);
-    else return oldMessageBoxA(hWnd, lpText, lpCaption, uType);
-}
-
-LRESULT WINAPI newSendMessageA(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM IParam) {
-    const char* oldptr = (const char*)IParam;
-    if (oldptr && (strlen(oldptr) == 48)) 
-        IParam = (LPARAM)verData.c_str();
-    return oldSendMessageA(hWnd, Msg, wParam, IParam);
-}
-
-
-DWORD WINAPI newGetGlyphOutlineA(HDC hdc, UINT uChar, UINT fuFormat, LPGLYPHMETRICS lpgm,
-    DWORD cjBuffer, LPVOID pvBuffer, MAT2* lpmat) {
-    tagTEXTMETRICA lptm;
-    LONG tmHeight;
-    GetTextMetricsA(hdc, &lptm);
-    tmHeight = lptm.tmHeight;
-    Dc3Font* font = GetFontStruct(tmHeight);
-    if (uChar == 0xA1EC) {
-        uChar = 0x81F4;
-        if (!font->jisFont) 
-            font->jisFont = CreateFontA(
-                tmHeight, tmHeight / 2, 0, 0, 0, 0, 0, 0, 0x80, 4, 0x20, 4, 4, "黑体"
-            );
-        SelectObject(hdc, font->jisFont);
-    }
-    else SelectObject(hdc, font->chsFont);
-    if (uChar == 0x23) uChar = 0x20;
-    return oldGetGlyphOutlineA(hdc, uChar, fuFormat, lpgm, cjBuffer, pvBuffer, lpmat);
-}
-
-bool initComplete() {
-
-    const wchar_t* _chsinfo_ = L"cn_Data\\_chsinfo_";
-    if (GetFileAttributes(_chsinfo_) == INVALID_FILE_ATTRIBUTES ||
-        GetFileAttributes(L"cn_Data\\LOGO.crx") == INVALID_FILE_ATTRIBUTES ||
-        GetFileAttributes(L"cn_Data\\config.mes") == INVALID_FILE_ATTRIBUTES
-        ) return false;
-
-    FILE * _chsinfo_fp_ = _wfopen(_chsinfo_, L"r");
-    if (_chsinfo_fp_ == NULL) return false;
-    else {
-        char *data = new char[100];
-        fgets(data, 100, _chsinfo_fp_);
-        szWndName.append(data);
-        while (fgets(data, 100, _chsinfo_fp_))
-            verData.append(data).append("\n");
-        delete[] data;
-        fclose(_chsinfo_fp_);
-    }
-
-    if (_gdi32 == NULL ||_user32 == NULL || _kernel32 == NULL || BaseAddr == NULL)
+    bool MemWrite(uintptr_t Addr, void* Buf, size_t Size) {
+        DWORD OldPro;
+        SIZE_T wirteBytes = 0;
+        if (VirtualProtect((VOID*)Addr, Size, PAGE_EXECUTE_READWRITE, &OldPro)) {
+            WriteProcessMemory(INVALID_HANDLE_VALUE, (VOID*)Addr, Buf, Size, &wirteBytes);
+            VirtualProtect((VOID*)Addr, Size, OldPro, &OldPro);
+            return Size == wirteBytes;
+        }
         return false;
-    
-    oldCreateFontIndirectA = (_CreateFontIndirectA)GetProcAddress(_gdi32, "CreateFontIndirectA");
-    oldCreateWindowExA = (_CreateWindowExA)GetProcAddress(_user32, "CreateWindowExA");
-    oldCreateFileA = (_CreateFileA)GetProcAddress(_kernel32, "CreateFileA");
-    oldCreateFileW = (_CreateFileW)GetProcAddress(_kernel32, "CreateFileW");
-    oldFindFirstFileA = (_FindFirstFileA)GetProcAddress(_kernel32, "FindFirstFileA");
-    oldMessageBoxA = (_MessageBoxA)GetProcAddress(_user32, "MessageBoxA");
-    oldSendMessageA = (_SendMessageA)GetProcAddress(_user32, "SendMessageA");
-    oldGetGlyphOutlineA = (_GetGlyphOutlineA)GetProcAddress(_gdi32, "GetGlyphOutlineA");
+    }
 
-    if (oldCreateFontIndirectA == NULL || oldCreateWindowExA == NULL ||
-        oldFindFirstFileA == NULL || oldMessageBoxA == NULL ||
-        oldCreateFileA == NULL || oldCreateFileW == NULL||
-        oldSendMessageA == NULL || oldGetGlyphOutlineA == NULL
-        ) return false;
-
-    return true;
+    bool JmpWrite(uintptr_t orgAddr, uintptr_t tarAddr) {
+        uint8_t jmp_write[5] = { 0xe9, 0x0, 0x0, 0x0, 0x0 };
+        tarAddr = tarAddr - orgAddr - 5;
+        memcpy(jmp_write + 1, &tarAddr, 4);
+        return MemWrite(orgAddr, jmp_write, 5);
+    }
 }
 
-void initHookLoader() {
-    //make_console();
-    if (initComplete()) { 
+namespace Hook::type {
+    typedef struct { HFONT jis_f; HFONT gbk_f; size_t size; } font;
+    typedef HANDLE(WINAPI* FindFirstFileA)(LPCSTR, LPWIN32_FIND_DATAA);
+    typedef DWORD(WINAPI* GetGlyphOutlineA)(HDC, UINT, UINT, LPGLYPHMETRICS, DWORD, LPVOID, MAT2*);
+    typedef HANDLE(WINAPI* CreateFileA)(LPCSTR , DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+    typedef HANDLE(WINAPI* CreateFileW)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+}
 
-        memcpy((void*)(BaseAddr + 0x9DF58), chapterTitle, sizeof(chapterTitle));
+namespace Hook::val {
+    DWORD BaseAddr;
+    std::string replacePathA;
+    std::wstring replacePathW;
+    std::vector<type::font*> fonts;
+    HMODULE gdi32_dll, kernel32_dll;
+}
+
+namespace Hook::def {
+
+    type::font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
+        GetTextMetricsA(hdc, &lptm);
+        size_t size = (size_t)lptm.tmHeight;
+        for (type::font* f : val::fonts) if (f->size == size) return f;
+        type::font* nf = new type::font{ nullptr, nullptr, size };
+        nf->gbk_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x86, 4, 0x20, 4, 4, "黑体");
+        nf->jis_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x80, 4, 0x20, 4, 4, "黑体");
+        val::fonts.push_back(nf);
+        return nf;
+    }
+
+    bool ReplacePathW(std::wstring path) {
+        path.assign(path.substr(path.find_last_of(L"\\") + 1)).insert(0, L"cn_Data\\");
+        if(GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+        val::replacePathW.assign(path);
+        return true;
+    }
+
+    bool ReplacePathA(std::string path) {
+        path.assign(path.substr(path.find_last_of("\\") + 1)).insert(0, "cn_Data\\");
+        if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+        val::replacePathA.assign(path);
+        return true;
+    }
+}
+
+namespace Hook::fun {
+
+    type::GetGlyphOutlineA OldGetGlyphOutlineA;
+    DWORD WINAPI NewGetGlyphOutlineA(HDC hdc, UINT uChar, UINT fuf, LPGLYPHMETRICS lpgm, DWORD cjbf, LPVOID pvbf, MAT2* lpmat) {
+        type::font* font = def::GetFontStruct(hdc);
+        if (uChar == 0xA1EC) { // 替换♪
+            uChar = 0x81F4;
+            SelectObject(hdc, font->jis_f);
+        }
+        else {
+            // 替换半角空格
+            if (uChar == 0x23) uChar = 0x20;
+            SelectObject(hdc, font->gbk_f);
+        }
+        return OldGetGlyphOutlineA(hdc, uChar, fuf, lpgm, cjbf, pvbf, lpmat);
+    }
+
+    type::FindFirstFileA OldFindFirstFileA;
+    HANDLE WINAPI NewFindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData) {
+        return OldFindFirstFileA(def::ReplacePathA(lpFileName) ? val::replacePathA.c_str() : lpFileName, lpFindFileData);
+    }
+
+    type::CreateFileA OldCreateFileA;
+    HANDLE WINAPI NewCreateFileA(LPCSTR lpFN, DWORD dwDA, DWORD dwSM, LPSECURITY_ATTRIBUTES lpSA, DWORD dwCD, DWORD dwFAA, HANDLE hTF) {
+        return OldCreateFileA(def::ReplacePathA(lpFN) ? val::replacePathA.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
+    }
+
+    type::CreateFileW OldCreateFileW;
+    HANDLE WINAPI NewCreateFileW(LPCWSTR lpFN, DWORD dwDA, DWORD dwSM, LPSECURITY_ATTRIBUTES lpSA, DWORD dwCD, DWORD dwFAA, HANDLE hTF) {
+        return OldCreateFileW(def::ReplacePathW(lpFN) ? val::replacePathW.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
+    }
+}
+
+namespace Hook {
+
+    void init() {
+        val::BaseAddr = (DWORD)GetModuleHandle(NULL);
+        Mem::MemWrite(val::BaseAddr + 0x0E8DB, (void*)&dc3wy::wTitle_name, 4);
+        Mem::MemWrite(val::BaseAddr + 0x0DABF, (void*)&dc3wy::description, 4);
+        Mem::MemWrite(val::BaseAddr + 0x9DF58, dc3wy::chapter_titles, sizeof(dc3wy::chapter_titles));
+        if (val::gdi32_dll = GetModuleHandleA("gdi32.dll")) {
+            fun::OldGetGlyphOutlineA = (type::GetGlyphOutlineA)GetProcAddress(val::gdi32_dll, "GetGlyphOutlineA");
+        }
+        if (val::kernel32_dll = GetModuleHandleA("kernel32.dll")) {
+            fun::OldFindFirstFileA = (type::FindFirstFileA)GetProcAddress(val::kernel32_dll, "FindFirstFileA");
+            fun::OldCreateFileA = (type::CreateFileA)GetProcAddress(val::kernel32_dll, "CreateFileA");
+            fun::OldCreateFileW = (type::CreateFileW)GetProcAddress(val::kernel32_dll, "CreateFileW");
+        }
+    }
+
+    void start() {
         DetourTransactionBegin();
-        //DetourAttach((void**)&oldCreateFontIndirectA, newCreateFontIndirectA);
-        DetourAttach(&oldCreateWindowExA, NewCreateWindowExA);
-        DetourAttach(&oldCreateFileA, NewCreateFileA);
-        DetourAttach(&oldCreateFileW, newCreateFileW);
-        DetourAttach(&oldFindFirstFileA, NewFindFirstFileA);
-        DetourAttach((void**)&oldMessageBoxA, newMessageBoxA);
-        DetourAttach((void**)&oldSendMessageA, newSendMessageA);
-        DetourAttach((void**)&oldGetGlyphOutlineA, newGetGlyphOutlineA);
+        if (fun::OldGetGlyphOutlineA) {
+            DetourAttach((void**)&fun::OldGetGlyphOutlineA, fun::NewGetGlyphOutlineA);
+        }
+        if (fun::OldFindFirstFileA)   {
+            DetourAttach((void**)&fun::OldFindFirstFileA,  fun::NewFindFirstFileA);
+        }
+        if (fun::OldCreateFileA) {
+            DetourAttach((void**)&fun::OldCreateFileA, fun::NewCreateFileA);
+        }
+
+        if (fun::OldCreateFileW) {
+            DetourAttach((void**)&fun::OldCreateFileW, fun::NewCreateFileW);
+        }
         DetourUpdateThread(GetCurrentThread());
         DetourTransactionCommit();
-        return;
     }
-    MessageBoxW(NULL, L"补丁初始化失败！", L"警告", MB_OK | MB_ICONINFORMATION);
-    exit(0);
 }
 
-
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved) {
-    switch (ul_reason_for_call)
+extern "C" __declspec(dllexport) void hook(void) {}
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved){
+    switch (ul_reason_for_call) 
     {
-        case DLL_PROCESS_ATTACH:
-            initHookLoader();
-            break;
-        case DLL_THREAD_ATTACH:
-            break;
-        case DLL_THREAD_DETACH:
-            break;
-        case DLL_PROCESS_DETACH:
-            break;
+    case DLL_PROCESS_ATTACH:
+    #ifdef _DEBUG
+        AllocConsole();
+        freopen("CONOUT$", "w", stdout);
+        freopen("CONIN$", "r", stdin);
+    #endif
+        Hook::init();
+        Hook::start();
+        break;
+    case DLL_THREAD_ATTACH:
+    case DLL_THREAD_DETACH:
+    case DLL_PROCESS_DETACH:
+        break;
     }
     return TRUE;
 }
+
