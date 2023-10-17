@@ -29,7 +29,7 @@ namespace Hook::Mem {
 }
 
 namespace Hook::Type {
-    typedef struct { HFONT jis_f; HFONT gbk_f; size_t size; } font;
+    typedef struct { HFONT jis_f; HFONT gbk_f; size_t size; } Font;
     typedef HANDLE(WINAPI* FindFirstFileA)(LPCSTR, LPWIN32_FIND_DATAA);
     typedef DWORD(WINAPI* GetGlyphOutlineA)(HDC, UINT, UINT, LPGLYPHMETRICS, DWORD, LPVOID, MAT2*);
     typedef HANDLE(WINAPI* CreateFileA)(LPCSTR , DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
@@ -40,17 +40,17 @@ namespace Hook::Val {
     DWORD BaseAddr;
     std::string replacePathA;
     std::wstring replacePathW;
-    std::vector<Type::font*> fonts;
+    std::vector<Type::Font*> fonts;
     HMODULE gdi32_dll, kernel32_dll;
 }
 
 namespace Hook::Def {
 
-    Type::font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
+    Type::Font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
         GetTextMetricsA(hdc, &lptm);
         size_t size = (size_t)lptm.tmHeight;
-        for (Type::font* f : Val::fonts) if (f->size == size) return f;
-        Type::font* nf = new Type::font{ nullptr, nullptr, size };
+        for (Type::Font* f : Val::fonts) if (f->size == size) return f;
+        Type::Font* nf = new Type::Font{ nullptr, nullptr, size };
         nf->gbk_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x86, 4, 0x20, 4, 4, "黑体");
         nf->jis_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x80, 4, 0x20, 4, 4, "黑体");
         Val::fonts.push_back(nf);
@@ -76,7 +76,7 @@ namespace Hook::Fun {
 
     Type::GetGlyphOutlineA OldGetGlyphOutlineA;
     DWORD WINAPI NewGetGlyphOutlineA(HDC hdc, UINT uChar, UINT fuf, LPGLYPHMETRICS lpgm, DWORD cjbf, LPVOID pvbf, MAT2* lpmat) {
-        Type::font* font = Def::GetFontStruct(hdc);
+        Type::Font* font = Def::GetFontStruct(hdc);
         if (uChar == 0xA1EC) { // 替换♪
             uChar = 0x81F4;
             SelectObject(hdc, font->jis_f);
