@@ -107,10 +107,6 @@ namespace Hook::Fun {
 namespace Hook {
 
     void Init() {
-        Val::BaseAddr = (DWORD)GetModuleHandle(NULL);
-        Mem::MemWrite(Val::BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 4);
-        Mem::MemWrite(Val::BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
-        Mem::MemWrite(Val::BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
         if (Val::GDI32_DLL = GetModuleHandleA("gdi32.dll")) {
             Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(Val::GDI32_DLL, "GetGlyphOutlineA");
         }
@@ -118,6 +114,11 @@ namespace Hook {
             Fun::OldFindFirstFileA = (Type::FindFirstFileA)GetProcAddress(Val::KERNEL32_DLL, "FindFirstFileA");
             Fun::OldCreateFileA = (Type::CreateFileA)GetProcAddress(Val::KERNEL32_DLL, "CreateFileA");
             Fun::OldCreateFileW = (Type::CreateFileW)GetProcAddress(Val::KERNEL32_DLL, "CreateFileW");
+        }
+        if (Val::BaseAddr = (DWORD)GetModuleHandle(NULL)) {
+            Mem::MemWrite(Val::BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 4);
+            Mem::MemWrite(Val::BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
+            Mem::MemWrite(Val::BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
         }
     }
 
@@ -160,4 +161,3 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReser
     }
     return TRUE;
 }
-
