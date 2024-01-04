@@ -9,7 +9,7 @@
 
 namespace Hook::Mem {
 
-    bool MemWrite(uintptr_t Addr, void* Buf, size_t Size) {
+    static bool MemWrite(uintptr_t Addr, void* Buf, size_t Size) {
         DWORD OldPro = NULL; SIZE_T wirteBytes = NULL;
         if (VirtualProtect((VOID*)Addr, Size, PAGE_EXECUTE_READWRITE, &OldPro)) {
             WriteProcessMemory(INVALID_HANDLE_VALUE, (VOID*)Addr, Buf, Size, &wirteBytes);
@@ -19,8 +19,8 @@ namespace Hook::Mem {
         return false;
     }
 
-    bool JmpWrite(uintptr_t orgAddr, uintptr_t tarAddr) {
-        uint8_t jmp_write[5] = { 0xe9, 0x0, 0x0, 0x0, 0x0 };
+    static bool JmpWrite(uintptr_t orgAddr, uintptr_t tarAddr) {
+        uint8_t jmp_write[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
         tarAddr = tarAddr - orgAddr - 5;
         memcpy(jmp_write + 1, &tarAddr, 4);
         return MemWrite(orgAddr, jmp_write, 5);
@@ -37,7 +37,7 @@ namespace Hook::Type {
 
 namespace Hook::Val {
     DWORD BaseAddr;
-    std::string ReplacePathA;
+    std::string  ReplacePathA;
     std::wstring ReplacePathW;
     std::vector<Type::Font*> Fonts;
     HMODULE GDI32_DLL, KERNEL32_DLL;
@@ -45,29 +45,27 @@ namespace Hook::Val {
 
 namespace Hook::Def {
 
-    Type::Font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
+    static Type::Font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
         GetTextMetricsA(hdc, &lptm);
         size_t size = (size_t)lptm.tmHeight;
         for (Type::Font* f : Val::Fonts) if (f->size == size) return f;
-        Type::Font* nf = new Type::Font{ nullptr, nullptr, size };
+        Type::Font* nf = new Type::Font { nullptr, nullptr, size };
         nf->gbk_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x86, 4, 0x20, 4, 4, "黑体");
         nf->jis_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x80, 4, 0x20, 4, 4, "黑体");
         Val::Fonts.push_back(nf);
         return nf;
     }
 
-    bool ReplacePathW(std::wstring path) {
+    static bool ReplacePathW(std::wstring path) {
         path.assign(path.substr(path.find_last_of(L"\\") + 1)).insert(0, L"cn_Data\\");
-        if(GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-        Val::ReplacePathW.assign(path);
-        return true;
+        if(GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)  return false ;
+        return Val::ReplacePathW.assign(path).size();
     }
 
-    bool ReplacePathA(std::string path) {
-        path.assign(path.substr(path.find_last_of("\\") + 1)).insert(0, "cn_Data\\");
+    static bool ReplacePathA(std::string path) {
+        path.assign(path.substr(path.find_last_of("\\") + 1)).insert(0,  "cn_Data\\");
         if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-        Val::ReplacePathA.assign(path);
-        return true;
+        return Val::ReplacePathA.assign(path).size();
     }
 }
 
@@ -76,11 +74,10 @@ namespace Hook::Fun {
     Type::GetGlyphOutlineA OldGetGlyphOutlineA;
     DWORD WINAPI NewGetGlyphOutlineA(HDC hdc, UINT uChar, UINT fuf, LPGLYPHMETRICS lpgm, DWORD cjbf, LPVOID pvbf, MAT2* lpmat) {
         Type::Font* font = Def::GetFontStruct(hdc);
-        if (uChar == 0xA1EC) { // 替换♪
-            uChar = 0x81F4;
+        if (uChar == 0xA1EC) { 
+            uChar = 0x81F4; // 替换♪
             SelectObject(hdc, font->jis_f);
-        }
-        else {
+        } else {
             // 替换半角空格
             if (uChar == 0x23) uChar = 0x20;
             SelectObject(hdc, font->gbk_f);
@@ -106,7 +103,46 @@ namespace Hook::Fun {
 
 namespace Hook {
 
-    void Init() {
+    struct dc3wy {
+
+        int audio_stop(int a2) {
+            using _Stop = int(__stdcall*)(int);
+            // ...
+            return 0;
+        }
+
+        static int __stdcall audio_play(int a1, int a2) {
+            char* ptr = ((char*)&a2) + 0x08 + 0x130;
+            printf("[argv] a1: %d, a2: %d\n", a1, a2);
+            printf("0x%p 0x%p %s\n", &a2, ptr, *(char**)ptr);
+            //printf("%s\n", *(char**)name);
+            /* if (size_t pos = std::string_view(*(char**)ptr).find_last_of("\\"); pos != std::string::npos) {
+                std::string_view _name((*(char**)ptr) + pos + 1);
+                std::cout << "name: " << _name << std::endl;
+            }*/
+            //typedef int(__stdcall* _Play)(int a1, int a2, int a3, int a4);
+
+            using _Play = int(__stdcall*)(int, int, int, int);
+            if (a2 == 1) {
+                DWORD edx = *(DWORD*)(Val::BaseAddr + 0xA95A4);
+                *(DWORD*)(edx + 0x136C) = a1;
+            }
+            DWORD eax = (DWORD)(Val::BaseAddr + 0xA95EC);
+            DWORD* val = (DWORD*)((DWORD*)eax)[a2];
+            _Play play = *(_Play*)((*val) + 0x30);
+            int result = play((int)val, 0, 0, a1);
+            printf("val: 0x%p\n\n", (void*)val);
+            return  result;
+        }
+
+        static inline intptr_t _audio_stop() {
+            using _audio_stop = int(dc3wy::*)(int);
+            _audio_stop f_ptr = &dc3wy::audio_stop;
+            return (intptr_t)&f_ptr;
+        }
+    };
+
+    static void Init() {
         if (Val::GDI32_DLL = GetModuleHandleA("gdi32.dll")) {
             Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(Val::GDI32_DLL, "GetGlyphOutlineA");
         }
@@ -119,16 +155,19 @@ namespace Hook {
             Mem::MemWrite(Val::BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 4);
             Mem::MemWrite(Val::BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
             Mem::MemWrite(Val::BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
+            
+            Mem::JmpWrite(Val::BaseAddr + 0x31870, (intptr_t)&dc3wy::audio_play);
+            //Mem::JmpWrite(Val::BaseAddr + 0x32490, (intptr_t)dc3wy::_audio_stop());
         }
     }
 
-    void Start() {
+    static void Start() {
         DetourTransactionBegin();
         if (Fun::OldGetGlyphOutlineA) {
             DetourAttach((void**)&Fun::OldGetGlyphOutlineA, Fun::NewGetGlyphOutlineA);
         }
         if (Fun::OldFindFirstFileA)   {
-            DetourAttach((void**)&Fun::OldFindFirstFileA,  Fun::NewFindFirstFileA);
+            DetourAttach((void**)&Fun::OldFindFirstFileA,   Fun::NewFindFirstFileA);
         }
         if (Fun::OldCreateFileA) {
             DetourAttach((void**)&Fun::OldCreateFileA, Fun::NewCreateFileA);
@@ -141,16 +180,16 @@ namespace Hook {
     }
 }
 
-extern "C" __declspec(dllexport) void hook(void) {}
+extern "C" __declspec(dllexport) void hook(void) { }
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved){
     switch (ul_reason_for_call) 
     {
     case DLL_PROCESS_ATTACH:
-    #ifdef _DEBUG
+    //#ifdef _DEBUG
         AllocConsole();
-        freopen("CONOUT$", "w", stdout);
-        freopen("CONIN$", "r", stdin);
-    #endif
+        (void)freopen("CONOUT$", "w", stdout);
+        (void)freopen("CONIN$", "r", stdin);
+    //#endif
         Hook::Init();
         Hook::Start();
         break;
