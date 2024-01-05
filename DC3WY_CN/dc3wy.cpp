@@ -20,7 +20,10 @@ namespace Dc3wy {
     struct dc3wy {
 
         static int __stdcall audio_play(int a1, int a2) {
-            printf("%s\n", current_audio_name);
+            printf(
+                "[audio_play] v1: 0x%02X v2: 0x%02X file: %s\n", 
+                a1, a2, current_audio_name
+            );
             if (a2 == 1) {
                 DWORD Buf = *(DWORD*)dword_a95a4;
                 *(DWORD*)(Buf + 0x136C) = a1;
@@ -31,7 +34,22 @@ namespace Dc3wy {
         }
 
         int __thiscall audio_stop(int a2) {
-         
+            DWORD Buf = *(DWORD*)(BaseAddr + 0xA95A4);
+            if (a2 - 1 <= 3 && Buf) {
+                *((BYTE*)Buf + 32 * a2 + 0x4D10) = 0;
+            }
+            *(DWORD*)&this[5 * a2 + 0x15] = 0;
+            DWORD dwordA95EC = (DWORD)(BaseAddr + 0xA95EC);
+            DWORD* val = (DWORD*)((DWORD*)dwordA95EC)[a2];
+            using _Stop = int(__stdcall*)(int);
+            using _SetCurPos = int(__stdcall*)(int, int);
+            _SetCurPos set = *(_SetCurPos*)((*val) + 0x34);
+            set((DWORD)val, 0x00);
+            _Stop stop = *(_Stop*)((*val) + 0x48);
+            stop((DWORD)val);
+            using sub_432000 = int(__thiscall*)(DWORD, int);
+            sub_432000 result = *(sub_432000*)(BaseAddr + 0x32000);
+            return result((DWORD)this, a2);
         }
     };
 

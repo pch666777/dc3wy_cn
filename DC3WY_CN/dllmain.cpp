@@ -35,45 +35,38 @@ namespace Hook::Type {
     typedef HANDLE(WINAPI* CreateFileW)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
 }
 
-namespace Hook::Val {
-    DWORD BaseAddr;
-    std::string  ReplacePathA;
-    std::wstring ReplacePathW;
-    std::vector<Type::Font*> Fonts;
-    HMODULE GDI32_DLL, KERNEL32_DLL;
-}
+namespace Hook::Fun {
 
-namespace Hook::Def {
+    std::string  NewReplacePathA;
+    std::wstring NewReplacePathW;
+    std::vector<Type::Font*> Fonts;
 
     static Type::Font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
         GetTextMetricsA(hdc, &lptm);
         size_t size = (size_t)lptm.tmHeight;
-        for (Type::Font* f : Val::Fonts) if (f->size == size) return f;
-        Type::Font* nf = new Type::Font { nullptr, nullptr, size };
+        for (Type::Font* f : Fonts) if (f->size == size) return f;
+        Type::Font* nf = new Type::Font{ nullptr, nullptr, size };
         nf->gbk_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x86, 4, 0x20, 4, 4, "黑体");
         nf->jis_f = CreateFontA(size, size / 2, 0, 0, 0, 0, 0, 0, 0x80, 4, 0x20, 4, 4, "黑体");
-        Val::Fonts.push_back(nf);
+        Fonts.push_back(nf);
         return nf;
     }
 
     static bool ReplacePathW(std::wstring path) {
         path.assign(path.substr(path.find_last_of(L"\\") + 1)).insert(0, L"cn_Data\\");
-        if(GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)  return false;
-        return Val::ReplacePathW.assign(path).size();
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES)  return false;
+        return NewReplacePathW.assign(path).size();
     }
 
     static bool ReplacePathA(std::string path) {
-        path.assign(path.substr(path.find_last_of("\\") + 1)).insert(0,  "cn_Data\\");
+        path.assign(path.substr(path.find_last_of("\\") + 1)).insert(0, "cn_Data\\");
         if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-        return Val::ReplacePathA.assign(path).size();
+        return NewReplacePathA.assign(path).size();
     }
-}
-
-namespace Hook::Fun {
 
     Type::GetGlyphOutlineA OldGetGlyphOutlineA;
     static DWORD WINAPI NewGetGlyphOutlineA(HDC hdc, UINT uChar, UINT fuf, LPGLYPHMETRICS lpgm, DWORD cjbf, LPVOID pvbf, MAT2* lpmat) {
-        Type::Font* font = Def::GetFontStruct(hdc);
+        Type::Font* font = GetFontStruct(hdc);
         if (uChar == 0xA1EC) { 
             uChar = 0x81F4; // 替换♪
             SelectObject(hdc, font->jis_f);
@@ -87,38 +80,38 @@ namespace Hook::Fun {
 
     Type::FindFirstFileA OldFindFirstFileA;
     static HANDLE WINAPI NewFindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData) {
-        return OldFindFirstFileA(Def::ReplacePathA(lpFileName) ? Val::ReplacePathA.c_str() : lpFileName, lpFindFileData);
+        return OldFindFirstFileA(ReplacePathA(lpFileName) ? NewReplacePathA.c_str() : lpFileName, lpFindFileData);
     }
 
     Type::CreateFileA OldCreateFileA;
     static HANDLE WINAPI NewCreateFileA(LPCSTR lpFN, DWORD dwDA, DWORD dwSM, LPSECURITY_ATTRIBUTES lpSA, DWORD dwCD, DWORD dwFAA, HANDLE hTF)  {
-        return OldCreateFileA(Def::ReplacePathA(lpFN) ? Val::ReplacePathA.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
+        return OldCreateFileA(ReplacePathA(lpFN) ? NewReplacePathA.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
     }
 
     Type::CreateFileW OldCreateFileW;
     static HANDLE WINAPI NewCreateFileW(LPCWSTR lpFN, DWORD dwDA, DWORD dwSM, LPSECURITY_ATTRIBUTES lpSA, DWORD dwCD, DWORD dwFAA, HANDLE hTF) {
-        return OldCreateFileW(Def::ReplacePathW(lpFN) ? Val::ReplacePathW.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
+        return OldCreateFileW(ReplacePathW(lpFN) ? NewReplacePathW.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
     }
 }
 
 namespace Hook {
 
     static void Init() {
-        if (Val::GDI32_DLL = GetModuleHandleA("gdi32.dll")) {
-            Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(Val::GDI32_DLL, "GetGlyphOutlineA");
+        if (HMODULE GDI32_DLL = GetModuleHandleW(L"gdi32.dll")) {
+            Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(GDI32_DLL, "GetGlyphOutlineA");
         }
-        if (Val::KERNEL32_DLL = GetModuleHandleA("kernel32.dll")) {
-            Fun::OldFindFirstFileA = (Type::FindFirstFileA)GetProcAddress(Val::KERNEL32_DLL, "FindFirstFileA");
-            Fun::OldCreateFileA = (Type::CreateFileA)GetProcAddress(Val::KERNEL32_DLL, "CreateFileA");
-            Fun::OldCreateFileW = (Type::CreateFileW)GetProcAddress(Val::KERNEL32_DLL, "CreateFileW");
+        if (HMODULE KERNEL32_DLL = GetModuleHandleW(L"kernel32.dll")) {
+            Fun::OldFindFirstFileA = (Type::FindFirstFileA)GetProcAddress(KERNEL32_DLL, "FindFirstFileA");
+            Fun::OldCreateFileA = (Type::CreateFileA)GetProcAddress(KERNEL32_DLL, "CreateFileA");
+            Fun::OldCreateFileW = (Type::CreateFileW)GetProcAddress(KERNEL32_DLL, "CreateFileW");
         }
-        if (Val::BaseAddr = (DWORD)GetModuleHandle(NULL)) {
-            Dc3wy::jmp_hook_init((intptr_t)Val::BaseAddr);
-            Mem::MemWrite(Val::BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 4);
-            Mem::MemWrite(Val::BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
-            Mem::MemWrite(Val::BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
-            Mem::JmpWrite(Val::BaseAddr + 0x31870, (intptr_t)&Dc3wy::jmp_audio_play_hook);
-            //Mem::JmpWrite(Val::BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
+        if (DWORD BaseAddr = (DWORD)GetModuleHandleW(NULL)) {
+            Dc3wy::jmp_hook_init((intptr_t)BaseAddr);
+            Mem::MemWrite(BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 4);
+            Mem::MemWrite(BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
+            Mem::MemWrite(BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
+            Mem::JmpWrite(BaseAddr + 0x31870, (intptr_t)&Dc3wy::jmp_audio_play_hook);
+            //Mem::JmpWrite(BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
         }
     }
 
