@@ -1,9 +1,14 @@
 ﻿#pragma once
-namespace Dc3wy {
 
-	const char* WdTitleName = "【COKEZIGE STUDIO】Da Capo Ⅲ With You - Beta.0.5";
-	const char* Description = "#########[COKEZIGE STUDIO]#########\n_staff_\n1.总之打点字上去！！！\n2.总之打点字上去！！！\n3.总之打点字上去！！！\n4.总之打点字上去！！！";
-	const char* ChapterTitles[][2] = {
+namespace Dc3wy {
+	
+	extern void jmp_audio_play_hook();
+	extern void jmp_audio_stop_hook();
+	extern void jmp_hook_init(DWORD);
+
+	static const char* WdTitleName = "【COKEZIGE STUDIO】Da Capo Ⅲ With You - Beta.0.5";
+	static const char* Description = "#########[COKEZIGE STUDIO]#########\n_staff_\n1.总之打点字上去！！！\n2.总之打点字上去！！！\n3.总之打点字上去！！！\n4.总之打点字上去！！！";
+	static const char* ChapterTitles[][2] = {
 		{"WY_9_0610_E1_COM","新たなる試練？"},
 		{"WY_9_0609_F25_AOI","お医者さんごっこ"},
 		{"WY_9_0609_F24_SRA","貧乳こそ世界の真理"},
