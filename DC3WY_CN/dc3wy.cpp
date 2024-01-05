@@ -12,12 +12,11 @@ namespace Dc3wy {
     using DsCdStop = int(__stdcall*)(int);
     using DsSetPos = int(__stdcall*)(int, int);
     static Sub32000 sub_32000 = nullptr;
-    static DsCdPlay pDsCdPlay = nullptr;
     static DsCdStop pDsCdStop = nullptr;
     static DsSetPos pDsSetPos = nullptr;
     static DWORD BaseAddr = NULL;
 
-    struct dc3wy {
+    struct hook {
 
         static int __stdcall audio_play(int a1, int a2) {
             printf(
@@ -29,8 +28,8 @@ namespace Dc3wy {
                 *(DWORD*)(Buf + 0x136C) = a1;
             }
             DWORD* val = (DWORD*)((DWORD*)dword_a95ec)[a2];
-            pDsCdPlay = *(DsCdPlay*)((*val) + 0x30);
-            return pDsCdPlay((DWORD)val, 0, 0, a1);
+            DsCdPlay pDsCdPlay = *(DsCdPlay*)((*val) + 0x30);
+            return pDsCdPlay((DWORD)val, 0, 0, a1 != 0);
         }
 
         int __thiscall audio_stop(int a2) {
@@ -60,12 +59,12 @@ namespace Dc3wy {
             mov current_audio_name, eax
             mov eax, dword ptr ss:[esp]
             add esp, 0x04
-            jmp dc3wy::audio_play
+            jmp hook::audio_play
         }
     }
 
     __declspec(naked) void jmp_audio_stop_hook() {
-        __asm jmp dc3wy::audio_stop
+        __asm jmp hook::audio_stop
     }
 
     void jmp_hook_init(DWORD base) {
