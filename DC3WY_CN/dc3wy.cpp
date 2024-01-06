@@ -16,7 +16,7 @@ namespace Dc3wy::subtitle {
 
 
 
-    LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    static LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         switch (message) {
         case WM_CREATE: {
             // 在窗口创建时创建字体
@@ -83,24 +83,7 @@ namespace Dc3wy::subtitle {
 
     LRESULT CALLBACK SubWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == WM_CREATE) { 
-            SubtitleWnd = hWnd; 
-            // 在窗口创建时创建字体
-            LOGFONT lf;
-            ZeroMemory(&lf, sizeof(LOGFONT));
-            lf.lfHeight = 25; // 字体高度
-            lf.lfWeight = FW_NORMAL; // 字体粗细
-            lf.lfCharSet = DEFAULT_CHARSET;
-            lf.lfOutPrecision = OUT_DEFAULT_PRECIS;
-            lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-            lf.lfQuality = DEFAULT_QUALITY;
-            lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
-            wcscpy_s(lf.lfFaceName, L"黑体"); // 字体名称
-
-            HFONT hFont = CreateFontIndirect(&lf);
-            if (hFont != NULL) {
-                // 将字体句柄保存到窗口数据中
-                SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)hFont);
-            }
+            Dc3wy::subtitle::SubtitleWnd = hWnd;
             WNDCLASS childWndClass = { 0 };
             childWndClass.lpfnWndProc = ChildWndProc;
             childWndClass.hInstance = GetModuleHandle(NULL);
@@ -110,7 +93,6 @@ namespace Dc3wy::subtitle {
             hStaticText = CreateWindowExW(0, L"ChildWndClass", L"Child Window", WS_CHILD | WS_VISIBLE,
                 0, 0, 300, 60,
                 hWnd, NULL, GetModuleHandle(NULL), NULL);
-
             // 设置控件透明背景
             SetWindowLongPtr(hStaticText, GWL_EXSTYLE, GetWindowLongPtr(hStaticText, GWL_EXSTYLE) | WS_EX_LAYERED);
             SetLayeredWindowAttributes(hStaticText, RGB(0, 0, 255), 0, LWA_COLORKEY);
@@ -143,7 +125,6 @@ namespace Dc3wy::subtitle {
             //EndPaint(hWnd, &ps);
             //std::cout << " 进来了？？？" << std::endl;
             PostMessageA(hStaticText, WM_PAINT, NULL, NULL);
-            printf("\r[In SubWndProc] PlayedTime: %f", playedTime / 10);
 
         }
         else {
@@ -171,6 +152,7 @@ namespace Dc3wy::subtitle {
             DWORD playedSamples = (playCursor * 8) / (channels * bytesPerSample);
             playedTime = static_cast<double>(playedSamples) / static_cast<double>(samplesPerSecond);
             PostMessageA(SubtitleWnd, 114514, NULL, NULL);
+            printf("\r[In SubWndProc] PlayedTime: %f", playedTime / 10);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
         printf("\n\n");
