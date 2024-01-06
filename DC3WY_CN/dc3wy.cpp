@@ -1,39 +1,71 @@
-#include <iostream>
+ï»¿#include <iostream>
 #include <thread>
 #include <windows.h>
 #include <dsound.h>
 #include "dc3wy.h"
 
 namespace Dc3wy::subtitle {
-    
-    void init() {
 
-    }
-
+    HWND SubtitleWnd = NULL;
     IDirectSoundBuffer* pDsBuffer;
+
+    LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+        switch (message) {
+        case WM_CREATE: {
+            SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            break;
+        }
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            break;
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hWnd, &ps);
+
+            // æ¸…é™¤çª—å£èƒŒæ™¯
+            SetBkMode(hdc, TRANSPARENT);
+            SetTextColor(hdc, RGB(255, 255, 255));
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+            FillRect(hdc, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));
+
+            // åœ¨å­çª—å£ä¸­æ˜¾ç¤ºä¿¡æ¯
+            TextOutA(hdc, 10, 10, "This is the transparent child window.", strlen("This is the transparent child window."));
+
+            EndPaint(hWnd, &ps);
+            break;
+        }
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+        return 0;
+    }
+    
+    void init(HWND hWnd) {
+        SubtitleWnd = hWnd;
+    }
 
     static void run() {
         if(!pDsBuffer) return;
         WAVEFORMATEX format{};
-        // ¼ÆËã²ÉÑùÂÊºÍÖ¡´óÐ¡
         pDsBuffer->GetFormat(&format, sizeof(WAVEFORMATEX), NULL);
+        // è®¡ç®—é‡‡æ ·çŽ‡å’Œå¸§å¤§å°
         DWORD samplesPerSecond = format.nSamplesPerSec;
         DWORD bytesPerSample = format.wBitsPerSample / 8;
         DWORD channels = format.nChannels;
         while (pDsBuffer) {
-            // »ñÈ¡µ±Ç°²¥·ÅÎ»ÖÃ
+            // èŽ·å–å½“å‰æ’­æ”¾ä½ç½®
             DWORD playCursor, writeCursor;
             pDsBuffer->GetCurrentPosition(&playCursor, &writeCursor);
             DWORD playedSamples = (playCursor * 8) / (channels * bytesPerSample);
             double playedTime = static_cast<double>(playedSamples) / static_cast<double>(samplesPerSecond);
-            printf("\rplayedTime: %f", playedTime / 10);
+            printf("\rã€€PlayedTime: %f", playedTime / 10);
         }
-        std::cout << std::endl;
+        printf("\n\n");
     }
 
     static void test() {
-        std::thread testThread(subtitle::run);
-        testThread.detach();
+        std::thread(subtitle::run).detach();
     }
 
     void destroy() {
@@ -64,7 +96,7 @@ namespace Dc3wy {
             }
             if (PDSB pDSB = (PDSB)((DWORD*)dword_a95ec)[a2]) {
                 if (!strncmp("music", current_audio_name, 5)) {
-                    printf("%s\n", current_audio_name);
+                    printf("Current: [%s]\n", current_audio_name);
                     subtitle::pDsBuffer = pDSB;
                     subtitle::test();
                 }
