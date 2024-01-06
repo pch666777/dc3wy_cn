@@ -4,7 +4,14 @@
 #include "dc3wy.h"
 
 namespace Dc3wy::subtitle {
+    
+    void init() {
 
+    }
+
+    void destroy() {
+
+    }
 }
 
 namespace Dc3wy {
@@ -69,9 +76,6 @@ namespace Dc3wy {
         Dc3wy::dword_a95a4 = base + 0xA95A4;
         Dc3wy::dword_a95ec = base + 0xA95EC;
     }
-
-    void hook_destroy() {
-
-    }
+    
 }
 
