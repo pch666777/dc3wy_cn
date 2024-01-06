@@ -97,6 +97,7 @@ namespace Hook::Fun {
 namespace Hook {
 
     static void Init() {
+        
         if (HMODULE GDI32_DLL = GetModuleHandleW(L"gdi32.dll")) {
             Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(GDI32_DLL, "GetGlyphOutlineA");
         }

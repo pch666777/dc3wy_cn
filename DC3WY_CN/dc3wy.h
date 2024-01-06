@@ -6,15 +6,15 @@ namespace Dc3wy {
 	extern void jmp_audio_play_hook();
 	extern void jmp_audio_stop_hook();
 	extern void jmp_hook_init(intptr_t);
-	
 	namespace subtitle {
 		extern void init();
 		extern void destroy();
 	}
+
 	static const char* WdTitleName = \
 		"【COKEZIGE STUDIO】Da Capo Ⅲ With You - Beta.0.5";
 	static const char* Description = \
-		  "#########[COKEZIGE STUDIO]#########"
+		"#########[COKEZIGE STUDIO]#########"
 		N			"_staff_"
 		N		"1.总之打点字上去！！！"
 		N		"2.总之打点字上去！！！"

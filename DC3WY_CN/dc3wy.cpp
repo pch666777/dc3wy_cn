@@ -1,4 +1,5 @@
 #include <iostream>
+#include <thread>
 #include <windows.h>
 #include <dsound.h>
 #include "dc3wy.h"
@@ -7,6 +8,32 @@ namespace Dc3wy::subtitle {
     
     void init() {
 
+    }
+
+    IDirectSoundBuffer* pDsBuffer;
+
+    static void run() {
+        if(!pDsBuffer) return;
+        WAVEFORMATEX format{};
+        // 计算采样率和帧大小
+        pDsBuffer->GetFormat(&format, sizeof(WAVEFORMATEX), NULL);
+        DWORD samplesPerSecond = format.nSamplesPerSec;
+        DWORD bytesPerSample = format.wBitsPerSample / 8;
+        DWORD channels = format.nChannels;
+        while (pDsBuffer) {
+            // 获取当前播放位置
+            DWORD playCursor, writeCursor;
+            pDsBuffer->GetCurrentPosition(&playCursor, &writeCursor);
+            DWORD playedSamples = (playCursor * 8) / (channels * bytesPerSample);
+            double playedTime = static_cast<double>(playedSamples) / static_cast<double>(samplesPerSecond);
+            printf("\rplayedTime: %f", playedTime / 10);
+        }
+        std::cout << std::endl;
+    }
+
+    static void test() {
+        std::thread testThread(subtitle::run);
+        testThread.detach();
     }
 
     void destroy() {
@@ -27,15 +54,20 @@ namespace Dc3wy {
         using PDSB = IDirectSoundBuffer*;
         
         static int __stdcall audio_play(int a1, int a2) {
-            printf(
+            /*printf(
                 "[audio_play] v1: 0x%02X v2: 0x%02X file: %s\n", 
                 a1, a2, current_audio_name
-            );
+            );*/
             if (a2 == 1) {
                 DWORD Buf = *(DWORD*)dword_a95a4;
                 *(DWORD*)(Buf + 0x136C) = a1;
             }
             if (PDSB pDSB = (PDSB)((DWORD*)dword_a95ec)[a2]) {
+                if (!strncmp("music", current_audio_name, 5)) {
+                    printf("%s\n", current_audio_name);
+                    subtitle::pDsBuffer = pDSB;
+                    subtitle::test();
+                }
                 return pDSB->Play(0, 0, a1 != 0);
             }
             return NULL;
@@ -48,6 +80,9 @@ namespace Dc3wy {
             }
             ((DWORD*)this)[0x05 * a2 + 0x15] = 0;
             if (PDSB pDSB = (PDSB)((DWORD*)dword_a95ec)[a2]) {
+                if (pDSB == subtitle::pDsBuffer) {
+                    subtitle::pDsBuffer = nullptr;
+                }
                 pDSB->SetCurrentPosition(0x00);
                 pDSB->Stop();
                 return sub32000(this, a2);
