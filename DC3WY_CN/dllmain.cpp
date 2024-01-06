@@ -37,9 +37,9 @@ namespace Hook::Type {
 
 namespace Hook::Fun {
 
-    std::string  NewReplacePathA;
-    std::wstring NewReplacePathW;
-    std::vector<Type::Font*> Fonts;
+    static std::string  NewReplacePathA;
+    static std::wstring NewReplacePathW;
+    static std::vector<Type::Font*> Fonts;
 
     static Type::Font* GetFontStruct(HDC& hdc, tagTEXTMETRICA lptm = {}) {
         GetTextMetricsA(hdc, &lptm);
@@ -111,7 +111,7 @@ namespace Hook {
             Mem::MemWrite(BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
             Mem::MemWrite(BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
             Mem::JmpWrite(BaseAddr + 0x31870, (intptr_t)&Dc3wy::jmp_audio_play_hook);
-            //Mem::JmpWrite(BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
+            Mem::JmpWrite(BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
         }
     }
 
