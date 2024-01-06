@@ -33,7 +33,6 @@ namespace Hook::Type {
     typedef DWORD (WINAPI* GetGlyphOutlineA)(HDC, UINT, UINT, LPGLYPHMETRICS, DWORD, LPVOID, MAT2*);
     typedef HANDLE(WINAPI* CreateFileA)(LPCSTR , DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
     typedef HANDLE(WINAPI* CreateFileW)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
-    typedef HWND(WINAPI* CreateWindowExA)(DWORD, LPCSTR, LPCSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
 }
 
 namespace Hook::Fun {
@@ -79,28 +78,6 @@ namespace Hook::Fun {
         return OldGetGlyphOutlineA(hdc, uChar, fuf, lpgm, cjbf, pvbf, lpmat);
     }
 
-    Type::CreateWindowExA OldCreateWindowExA;
-    static HWND WINAPI NewCreateWindowExA(DWORD dwExSl, LPCSTR lpClsN, LPCSTR lpWndN, DWORD dwSl, int X, int Y, int nW, int nH, HWND hWndP, HMENU hM, HINSTANCE hIns, LPVOID lpPr) {
-        HWND hWndMain = OldCreateWindowExA(dwExSl, lpClsN, lpWndN, dwSl, X, Y, nW, nH, hWndP, hM, hIns, lpPr);
-        RECT mainClientRect = { NULL };
-        GetClientRect(hWndMain, &mainClientRect);
-        int subW = mainClientRect.right - mainClientRect.left;
-        int subH = mainClientRect.bottom - mainClientRect.top;
-        WNDCLASSA wcSub = { NULL };
-        wcSub.lpfnWndProc = Dc3wy::subtitle::WndProc;
-        wcSub.hInstance = GetModuleHandle(NULL);
-        wcSub.lpszClassName = "ChildWindowClass";
-        RegisterClassA(&wcSub);
-        HWND hWndChild = OldCreateWindowExA(WS_EX_OVERLAPPEDWINDOW, "ChildWindowClass", "Child Window", WS_CHILD | WS_VISIBLE,
-            0, 0, 300, 500,
-            hWndMain, NULL, GetModuleHandle(NULL), NULL);
-        SetLayeredWindowAttributes(hWndChild, RGB(0, 0, 0), 0, LWA_COLORKEY);
-        // 置顶子窗口
-        SetWindowPos(hWndChild, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        Dc3wy::subtitle::init(hWndMain);
-        return hWndMain;
-    }
-
     Type::FindFirstFileA OldFindFirstFileA;
     static HANDLE WINAPI NewFindFirstFileA(LPCSTR lpFileName, LPWIN32_FIND_DATAA lpFindFileData) {
         return OldFindFirstFileA(ReplacePathA(lpFileName) ? NewReplacePathA.c_str() : lpFileName, lpFindFileData);
@@ -120,9 +97,6 @@ namespace Hook::Fun {
 namespace Hook {
 
     static void Init() {
-        if (HMODULE USER32_DLL = GetModuleHandleW(L"user32.dll")) {
-            Fun::OldCreateWindowExA = (Type::CreateWindowExA)GetProcAddress(USER32_DLL, "CreateWindowExA");
-        }
         if (HMODULE GDI32_DLL = GetModuleHandleW(L"gdi32.dll")) {
             Fun::OldGetGlyphOutlineA = (Type::GetGlyphOutlineA)GetProcAddress(GDI32_DLL, "GetGlyphOutlineA");
         }
@@ -134,9 +108,10 @@ namespace Hook {
         }
         if (DWORD BaseAddr = (DWORD)GetModuleHandleW(NULL)) {
             Dc3wy::jmp_hook_init((intptr_t)BaseAddr);
-            Mem::MemWrite(BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 4);
-            Mem::MemWrite(BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 4);
+            Mem::MemWrite(BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 0x04);
+            Mem::MemWrite(BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 0x04);
             Mem::MemWrite(BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
+            Mem::MemWrite(BaseAddr + 0x101A5, &Dc3wy::subtitle::PtrSubWndProc, 0x04);
             Mem::JmpWrite(BaseAddr + 0x31870, (intptr_t)&Dc3wy::jmp_audio_play_hook);
             Mem::JmpWrite(BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
         }
@@ -144,9 +119,6 @@ namespace Hook {
 
     static void Attach() {
         DetourTransactionBegin();
-        if (Fun::OldCreateWindowExA) {
-            DetourAttach((void**)&Fun::OldCreateWindowExA, Fun::NewCreateWindowExA);
-        }
         if (Fun::OldGetGlyphOutlineA) {
             DetourAttach((void**)&Fun::OldGetGlyphOutlineA, Fun::NewGetGlyphOutlineA);
         }

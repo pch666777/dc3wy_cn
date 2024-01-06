@@ -7,7 +7,8 @@ namespace Dc3wy {
 	extern void jmp_audio_stop_hook();
 	extern void jmp_hook_init(intptr_t);
 	namespace subtitle {
-		extern LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
+		extern intptr_t PtrSubWndProc;
+		extern LRESULT CALLBACK SubWndProc(HWND, UINT, WPARAM, LPARAM);
 		extern void init(HWND);
 		extern void destroy();
 	}
