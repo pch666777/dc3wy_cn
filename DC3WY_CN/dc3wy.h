@@ -2,6 +2,7 @@
 
 namespace Dc3wy {
 	
+	extern void hook_destroy();
 	extern void jmp_audio_play_hook();
 	extern void jmp_audio_stop_hook();
 	extern void jmp_hook_init(intptr_t);
