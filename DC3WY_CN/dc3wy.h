@@ -1,4 +1,5 @@
 ﻿#pragma once
+#define N "\n"
 
 namespace Dc3wy {
 	
@@ -10,9 +11,15 @@ namespace Dc3wy {
 		extern void init();
 		extern void destroy();
 	}
-
-	static const char* WdTitleName = "【COKEZIGE STUDIO】Da Capo Ⅲ With You - Beta.0.5";
-	static const char* Description = "#########[COKEZIGE STUDIO]#########\n_staff_\n1.总之打点字上去！！！\n2.总之打点字上去！！！\n3.总之打点字上去！！！\n4.总之打点字上去！！！";
+	static const char* WdTitleName = \
+		"【COKEZIGE STUDIO】Da Capo Ⅲ With You - Beta.0.5";
+	static const char* Description = \
+		  "#########[COKEZIGE STUDIO]#########"
+		N			"_staff_"
+		N		"1.总之打点字上去！！！"
+		N		"2.总之打点字上去！！！"
+		N		"3.总之打点字上去！！！"
+		N		"4.总之打点字上去！！！";
 	static const char* ChapterTitles[][2] = {
 		{"WY_9_0610_E1_COM","新たなる試練？"},
 		{"WY_9_0609_F25_AOI","お医者さんごっこ"},
@@ -205,3 +212,4 @@ namespace Dc3wy {
 		{"WY_1_0706_A1_RCC","プロローグ"}
 	};
 }
+#undef N
