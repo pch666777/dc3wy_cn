@@ -3,9 +3,14 @@
 #include <iostream>
 #include <windows.h>
 #include <vector>
+#include <memory>
+#include <d3d9.h>
 #include "dc3wy.h"
 #include "detours.h"
 #pragma comment(lib, "detours.lib")
+
+std::vector<uint8_t> *cacheA;
+std::vector<uint8_t> *cachePresent;
 
 namespace Hook::Mem {
 
@@ -19,12 +24,55 @@ namespace Hook::Mem {
         return false;
     }
 
-    static bool JmpWrite(uintptr_t orgAddr, uintptr_t tarAddr) {
+    static bool JmpWrite(uintptr_t orgAddr, uintptr_t tarAddr, bool iscall = false, bool isSuper = true) {
         uint8_t jmp_write[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+		if (iscall) jmp_write[0] = 0xE8;
+
         tarAddr = tarAddr - orgAddr - 5;
         memcpy(jmp_write + 1, &tarAddr, 4);
-        return MemWrite(orgAddr, jmp_write, 5);
+		if (isSuper) return MemWrite(orgAddr, jmp_write, 5);
+		memcpy((void*)orgAddr, jmp_write, 5);
+		return true;
     }
+
+	static DWORD SetMemProtect(std::vector<uint8_t> *vec, DWORD newProtectFlag) {
+		if (vec) {
+			DWORD OldPro = NULL;
+			if (VirtualProtect((VOID*)vec->data(), vec->size(), newProtectFlag, &OldPro));
+			return OldPro;
+		}
+		return 0;
+	}
+	
+	//标准化的32位跳板call
+	//d3d9 present hook
+	//pushad 1
+	//push param  ---1 n
+	//call function ---2 5
+	//popad 1
+	//fix byte --3 n
+	//jmp addr --4 5
+	static std::vector<uint8_t>* CreateBuffCall(std::vector<uint8_t> paramList, void *funAddr, std::vector<uint8_t> fixList, intptr_t backAddr) {
+		//printf("paramList size is %d, fixList size is %d", paramList.size(), fixList.size());
+		auto vec = new std::vector<uint8_t>(12 + paramList.size() + fixList.size());
+		//printf("vec size is %d\n", vec.size());
+
+		uint8_t *ptr = vec->data();
+		*ptr = 0x60; //pushad
+		ptr++;
+		for (int ii = 0; ii < paramList.size(); ii++, ptr++) *ptr = paramList[ii]; //size()
+
+		Mem::JmpWrite((intptr_t)ptr, (intptr_t)funAddr, true, false);
+		ptr += 5;
+		*ptr = 0x61;
+		ptr++;
+		for (int ii = 0; ii < fixList.size(); ii++, ptr++) *ptr = fixList[ii]; //size()
+		Mem::JmpWrite((intptr_t)ptr, backAddr, false, false);
+
+		//权限
+		Mem::SetMemProtect(vec, PAGE_EXECUTE_READWRITE);
+		return vec;
+	}
 }
 
 namespace Hook::Type {
@@ -92,6 +140,48 @@ namespace Hook::Fun {
     static HANDLE WINAPI NewCreateFileW(LPCWSTR lpFN, DWORD dwDA, DWORD dwSM, LPSECURITY_ATTRIBUTES lpSA, DWORD dwCD, DWORD dwFAA, HANDLE hTF) {
         return OldCreateFileW(ReplacePathW(lpFN) ? NewReplacePathW.c_str() : lpFN, dwDA, dwSM, lpSA, dwCD, dwFAA, hTF);
     }
+
+	//在绘图结束前绘制
+	DWORD lastCount = 0;
+	IDirect3DDevice9* d3d9_device = nullptr;
+	IDirect3D9 *d3d9 = nullptr;
+	intptr_t callESP = 0;
+
+	static void _stdcall MyD3Ddraw(void*) {
+		//printf("yes!");
+		DWORD current = GetTickCount();
+		printf("time diff:%d", current - lastCount);
+		lastCount = current;
+	}
+
+
+	//准备一下Present
+	static void _stdcall MyPresent(void *eax) {
+
+	}
+	//获取D3D的信息
+	static void _stdcall GetD3Deice(IDirect3DDevice9 *drv) {
+		if (!d3d9_device) {
+			d3d9_device = drv;
+			printf("d3d9 device is %x\n", d3d9_device);
+			d3d9_device->GetDirect3D(&d3d9);
+			printf("d3d9 is %x\n", d3d9);
+
+			intptr_t vtable = *(intptr_t*)drv;
+			printf("endSence at %x, Present at %x\n", *(intptr_t*)(vtable + 0xA8), *(intptr_t*)(vtable + 0x44));
+
+			//push eax //0x50
+			intptr_t PresetAddress = *(intptr_t*)(vtable + 0x44);
+			cachePresent = Mem::CreateBuffCall({ 0x50 }, &Fun::MyPresent, { 0x8b, 0xff, 0x55, 0x8b, 0xec }, PresetAddress + 5);
+			//再添加一个记录esp的值，以便可以获知是哪个模块调用了函数
+			std::vector<uint8_t> tls = { 0x89, 0x25, 0xcc, 0xcc, 0xcc, 0xcc };
+			*(int*)(tls.data() + 2) = (int)(&callESP);
+			cachePresent->insert(cachePresent->begin(), tls.begin(), tls.end());
+			Mem::SetMemProtect(cachePresent, PAGE_EXECUTE_READWRITE);
+
+			Mem::JmpWrite(PresetAddress, (intptr_t)cachePresent->data());
+		}
+	}
 }
 
 namespace Hook {
@@ -114,6 +204,11 @@ namespace Hook {
             Mem::MemWrite(BaseAddr + 0x101A5, &Dc3wy::subtitle::PtrSubWndProc, 0x04);
             Mem::JmpWrite(BaseAddr + 0x31870, (intptr_t)&Dc3wy::jmp_audio_play_hook);
             Mem::JmpWrite(BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
+
+			//hook一个可以获取d3d驱动的位置
+			cacheA = Mem::CreateBuffCall({ 0x50 }, &Fun::GetD3Deice, { 0xff, 0xd2,0x8b, 0x46, 0x20 }, BaseAddr + 0x3077F);
+			Mem::JmpWrite(BaseAddr + 0x3077A, (uintptr_t)cacheA->data());
+
         }
     }
 
