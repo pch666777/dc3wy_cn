@@ -86,6 +86,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
     </Link>
+    <PostBuildEvent>
+      <Command>copy H:\MyCode1\DC3WY\DC3WY_CN\Debug\DC3WY_CN.dll H:\games\DC系列\DC3WY\DC3WY_CN.dll</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -151,6 +154,7 @@
     <ClInclude Include="detours.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="AsmHelper.cpp" />
     <ClCompile Include="dc3wy.cpp" />
     <ClCompile Include="dllmain.cpp" />
   </ItemGroup>

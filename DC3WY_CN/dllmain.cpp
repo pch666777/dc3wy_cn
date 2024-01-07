@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <d3d9.h>
+#include "AsmHelper.h"
 #include "dc3wy.h"
 #include "detours.h"
 #pragma comment(lib, "detours.lib")
@@ -170,16 +171,29 @@ namespace Hook::Fun {
 			intptr_t vtable = *(intptr_t*)drv;
 			printf("endSence at %x, Present at %x\n", *(intptr_t*)(vtable + 0xA8), *(intptr_t*)(vtable + 0x44));
 
-			//push eax //0x50
+			AsmHelper asm1;
 			intptr_t PresetAddress = *(intptr_t*)(vtable + 0x44);
-			cachePresent = Mem::CreateBuffCall({ 0x50 }, &Fun::MyPresent, { 0x8b, 0xff, 0x55, 0x8b, 0xec }, PresetAddress + 5);
-			//再添加一个记录esp的值，以便可以获知是哪个模块调用了函数
-			std::vector<uint8_t> tls = { 0x89, 0x25, 0xcc, 0xcc, 0xcc, 0xcc };
-			*(int*)(tls.data() + 2) = (int)(&callESP);
-			cachePresent->insert(cachePresent->begin(), tls.begin(), tls.end());
-			Mem::SetMemProtect(cachePresent, PAGE_EXECUTE_READWRITE);
+			//添加一个记录esp的值，以便可以获知是哪个模块调用了函数
+			asm1.add_valset({ 0x89, 0x25 }, &callESP); //mov $xx,esp
+			asm1.add_pushad({ 0x50 }); //pushad, push eax;
+			asm1.add_jmp(0xe8, &MyPresent); //call MyPresent
+			asm1.add_popad({ 0x8b, 0xff, 0x55, 0x8b, 0xec });//popad, fix some
+			asm1.add_jmp(0xe9, (void*)(PresetAddress + 5)); //jmp back
+			asm1.HookForMe(0xe9, PresetAddress);
 
-			Mem::JmpWrite(PresetAddress, (intptr_t)cachePresent->data());
+
+
+
+			//push eax //0x50
+			//intptr_t PresetAddress = *(intptr_t*)(vtable + 0x44);
+			//cachePresent = Mem::CreateBuffCall({ 0x50 }, &Fun::MyPresent, { 0x8b, 0xff, 0x55, 0x8b, 0xec }, PresetAddress + 5);
+			//再添加一个记录esp的值，以便可以获知是哪个模块调用了函数
+			//std::vector<uint8_t> tls = { 0x89, 0x25, 0xcc, 0xcc, 0xcc, 0xcc };
+			//*(int*)(tls.data() + 2) = (int)(&callESP);
+			//cachePresent->insert(cachePresent->begin(), tls.begin(), tls.end());
+			//Mem::SetMemProtect(cachePresent, PAGE_EXECUTE_READWRITE);
+
+			//Mem::JmpWrite(PresetAddress, (intptr_t)cachePresent->data());
 		}
 	}
 }
@@ -206,8 +220,16 @@ namespace Hook {
             Mem::JmpWrite(BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
 
 			//hook一个可以获取d3d驱动的位置
-			cacheA = Mem::CreateBuffCall({ 0x50 }, &Fun::GetD3Deice, { 0xff, 0xd2,0x8b, 0x46, 0x20 }, BaseAddr + 0x3077F);
-			Mem::JmpWrite(BaseAddr + 0x3077A, (uintptr_t)cacheA->data());
+			AsmHelper asms;
+			asms.add_pushad({ 0x50 });  //pushad, push eax
+			asms.add_jmp(0xe8, &Fun::GetD3Deice); //call xx
+			asms.add_popad({ 0xff, 0xd2,0x8b, 0x46, 0x20 }); //popad, some fix code
+			asms.add_jmp(0xe9, (void*)(BaseAddr + 0x3077F)); //jmp back
+			if (!asms.HookForMe(0xe9, BaseAddr + 0x3077A)) {
+				printf("GetD3Deice() hook faild!\n");
+			}
+			//cacheA = Mem::CreateBuffCall({ 0x50 }, &Fun::GetD3Deice, { 0xff, 0xd2,0x8b, 0x46, 0x20 }, BaseAddr + 0x3077F);
+			//Mem::JmpWrite(BaseAddr + 0x3077A, (uintptr_t)cacheA->data());
 
         }
     }
