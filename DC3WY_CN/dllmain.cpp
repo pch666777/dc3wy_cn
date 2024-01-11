@@ -4,14 +4,22 @@
 #include <windows.h>
 #include <vector>
 #include <memory>
+#include <string>
 #include <d3d9.h>
+//gdi+的头文件要放到d3d9之后，不然会出现依赖循环
+#include <gdiplus.h>
+#include <map>
 #include "AsmHelper.h"
 #include "dc3wy.h"
 #include "detours.h"
+
 #pragma comment(lib, "detours.lib")
+
+using namespace Gdiplus;
 
 std::vector<uint8_t> *cacheA;
 std::vector<uint8_t> *cachePresent;
+
 
 namespace Hook::Mem {
 
@@ -147,6 +155,15 @@ namespace Hook::Fun {
 	IDirect3DDevice9* d3d9_device = nullptr;
 	IDirect3D9 *d3d9 = nullptr;
 	intptr_t callESP = 0;
+	HWND wyHwnd = NULL;
+	//std::map<int, int> callMap;
+	GdiplusStartupInput gdiplusStartupInput;
+	ULONG_PTR gdiplusToken = 0;
+	std::unique_ptr<SolidBrush> brush;
+	std::unique_ptr<Font> font;
+
+	
+	
 
 	static void _stdcall MyD3Ddraw(void*) {
 		//printf("yes!");
@@ -158,8 +175,58 @@ namespace Hook::Fun {
 
 	//准备一下Present
 	static void _stdcall MyPresent(void *eax) {
+		DWORD current = GetTickCount();
+		DWORD diff = current - lastCount;
 
+		HDC hdc = GetDC(wyHwnd);
+		if (hdc) {
+			Graphics graphics(hdc);
+			std::wstring sst = std::to_wstring(current);
+			//draw it
+			PointF rect = { 20,20 };
+			INT len = sst.length();
+			auto ret = graphics.DrawString(sst.c_str(), len, font.get(), rect, brush.get());
+			printf("\rnow is %d,state %d", current, ret);
+		}
+		//printf("\rCall from %x, diff is %d, playtime is %lf", *(int*)callESP, diff, Dc3wy::subtitle::hasPlayTime);
+		lastCount = current;
 	}
+
+	static void _stdcall MyPresentBack() {
+		DWORD current = GetTickCount();
+		DWORD diff = current - lastCount;
+
+		HDC hdc = GetDC(wyHwnd);
+		if (hdc) {
+			Graphics graphics(hdc);
+			std::wstring sst = std::to_wstring(current);
+			//draw it
+			PointF rect = { 20,20 };
+			INT len = sst.length();
+			auto ret = graphics.DrawString(sst.c_str(), len, font.get(), rect, brush.get());
+			printf("\rnow is %d,state %d", current, ret);
+		}
+		//printf("\rCall from %x, diff is %d, playtime is %lf", *(int*)callESP, diff, Dc3wy::subtitle::hasPlayTime);
+		lastCount = current;
+	}
+
+	BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM IParam) {
+		int len = GetWindowTextLengthA(hwnd);
+		if (len > 0 && len < 256) {
+			char buf[256];
+			GetWindowTextA(hwnd, buf, 255);
+			std::string s(buf, len);
+			size_t index = s.find("【COKEZIGE STUDIO】");
+			if (index != std::string::npos) {
+				wyHwnd = hwnd;
+				Dc3wy::subtitle::mainWindow = hwnd;
+				printf("hwnd is %x, %s\n", Dc3wy::subtitle::mainWindow, s.c_str());
+			}
+
+		}
+		return TRUE;
+	}
+
 	//获取D3D的信息
 	static void _stdcall GetD3Deice(IDirect3DDevice9 *drv) {
 		if (!d3d9_device) {
@@ -171,30 +238,120 @@ namespace Hook::Fun {
 			intptr_t vtable = *(intptr_t*)drv;
 			printf("endSence at %x, Present at %x\n", *(intptr_t*)(vtable + 0xA8), *(intptr_t*)(vtable + 0x44));
 
+			EnumWindows(EnumWindowsProc, 0);
+			//先调用present，再调用gdi绘图
 			AsmHelper asm1;
+			AsmHelper asm2;
 			intptr_t PresetAddress = *(intptr_t*)(vtable + 0x44);
-			//添加一个记录esp的值，以便可以获知是哪个模块调用了函数
-			asm1.add_valset({ 0x89, 0x25 }, &callESP); //mov $xx,esp
-			asm1.add_pushad({ 0x50 }); //pushad, push eax;
-			asm1.add_jmp(0xe8, &MyPresent); //call MyPresent
-			asm1.add_popad({ 0x8b, 0xff, 0x55, 0x8b, 0xec });//popad, fix some
-			asm1.add_jmp(0xe9, (void*)(PresetAddress + 5)); //jmp back
+			//hook->跳板1-->ret 至跳板2 -->ret 回原call函数
+			//==== 挑板2 ====
+			//push ecx
+			//push ecx
+			//mov mov ecx,$callESP
+			asm2.add_valset({ 0x51, 0x51, 0x8b, 0x0d }, &callESP);
+			//mov [esp+4],ecx
+			//pop ecx
+			//pushad
+			asm2.add_cmd({0x89, 0x4c, 0x24, 0x4, 0x59, 0x60});
+			//call 
+			asm2.add_jmp(0xe8, &MyPresentBack);
+			//popad
+			//ret
+			asm2.add_popad({ 0xc3 });
+
+			//==== 跳板1 ====
+			//push ecx
+			//mov ecx,[esp+4]
+			asm1.add_cmd({ 0x51, 0x8b, 0x4c, 0x24, 0x4});
+			//mov $xxx,ecx 存储当前跳转
+			asm1.add_valset({ 0x89, 0x0d }, &callESP);
+			//改写当前的跳板
+			//lea ecx, 跳板2
+			asm1.add_valset({0x8d, 0x0d }, asm2.GetData());
+			//mov [esp+4],ecx
+			//pop ecx
+			asm1.add_cmd({0x89, 0x4C, 0x24, 0x04, 0x59 });
+			//fix code
+			asm1.add_cmd({ 0x8b, 0xff, 0x55, 0x8b, 0xec });
+			//jmpback hook
+			asm1.add_jmp(0xe9, (void*)(PresetAddress + 5));
 			asm1.HookForMe(0xe9, PresetAddress);
 
 
+			//先present，然后再画
+			//asm1.add_cmd({ 0x8b, 0xff, 0x55, 0x8b, 0xec });//函数头
+			//asm1.add_jmp(0xe9, (void*)(PresetAddress + 5)); //jmp back
+
+			//oldPresent_ptr = (D3DPresent)asm1.GetData();
+			//Mem::JmpWrite(PresetAddress, (intptr_t)MyPresentBack);
 
 
-			//push eax //0x50
-			//intptr_t PresetAddress = *(intptr_t*)(vtable + 0x44);
-			//cachePresent = Mem::CreateBuffCall({ 0x50 }, &Fun::MyPresent, { 0x8b, 0xff, 0x55, 0x8b, 0xec }, PresetAddress + 5);
-			//再添加一个记录esp的值，以便可以获知是哪个模块调用了函数
-			//std::vector<uint8_t> tls = { 0x89, 0x25, 0xcc, 0xcc, 0xcc, 0xcc };
-			//*(int*)(tls.data() + 2) = (int)(&callESP);
-			//cachePresent->insert(cachePresent->begin(), tls.begin(), tls.end());
-			//Mem::SetMemProtect(cachePresent, PAGE_EXECUTE_READWRITE);
 
-			//Mem::JmpWrite(PresetAddress, (intptr_t)cachePresent->data());
+			////添加一个记录esp的值，以便可以获知是哪个模块调用了函数
+			//asm1.add_valset({ 0x89, 0x25 }, &callESP); //mov $xx,esp
+			//asm1.add_pushad({ 0x50 }); //pushad, push eax;
+			//asm1.add_jmp(0xe8, &MyPresent); //call MyPresent
+			//asm1.add_popad({ 0x8b, 0xff, 0x55, 0x8b, 0xec });//popad, fix some
+			//asm1.add_jmp(0xe9, (void*)(PresetAddress + 5)); //jmp back
+			//asm1.HookForMe(0xe9, PresetAddress);
+
+			//hook D3D endscen
+			//AsmHelper asm1;
+			////添加一个记录esp的值，以便可以获知是哪个模块调用了函数
+			//asm1.add_valset({ 0x89, 0x25 }, &callESP); //mov $xx,esp
+			//asm1.add_pushad({ 0x50 }); //pushad, push eax;
+			//asm1.add_jmp(0xe8, &MyPresent); //call MyPresent
+			////fix code
+			//std::vector<uint8_t> tmp;
+			//tmp.push_back(0x61);  //popad
+			//intptr_t endSenceAddress = *(intptr_t*)(vtable + 0xA8);
+			//for (int ii = 0; ii < 7; ii++) tmp.push_back(*(uint8_t*)(endSenceAddress + ii));
+			//asm1.add_cmd(tmp);
+			//asm1.add_jmp(0xe9, (void*)(endSenceAddress + 7)); //jmpback
+			//asm1.HookForMe(0xe9, endSenceAddress); //hook
+
+			
+
+			if (GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL) == Gdiplus::Status::Ok) {
+				printf("gdi+ init sucess.\n");
+				font.reset(new Font(L"Arial", 24, FontStyleBold));
+				brush.reset(new SolidBrush(Color(128, 255, 0, 0)));
+			}
+			else printf("gdi+ init faild!\n");
+
 		}
+	}
+
+	// 用于处理VM_PAINT消息的钩子函数  
+	LRESULT CALLBACK VmPaintHookProc(int nCode, WPARAM wParam, LPARAM lParam) {
+		CWPSTRUCT* msg = (CWPSTRUCT*)lParam;
+		if (msg->message == WM_PAINT) {
+			DWORD current = GetTickCount();
+			DWORD diff = current - lastCount;
+			if (diff >= 15) {
+				printf("time diff %d,%d\n", diff, current);
+				lastCount = current;
+			}
+		}
+		return CallNextHookEx(NULL, nCode, wParam, lParam);
+	}
+
+	//在主消息函数中插入
+	bool isrun = false;
+	static void _stdcall MessageLoop() {
+		//DWORD current = GetTickCount();
+		//DWORD diff = current - lastCount;
+		//if (diff >= 15) {
+		//	printf("time diff %d,%d\n", diff, current);
+		//	lastCount = current;
+		//}
+		//if (!isrun) {
+		//	EnumWindows(EnumWindowsProc, 0);
+		//	HHOOK hHook = SetWindowsHookExA(WH_CALLWNDPROC, VmPaintHookProc, GetModuleHandle(NULL), GetCurrentThreadId());
+		//	if (hHook == NULL) printf("SetWindowsHookEx 失败\n");
+		//	else printf("hook sucess!");
+		//	isrun = true;
+		//}
 	}
 }
 
@@ -215,11 +372,12 @@ namespace Hook {
             Mem::MemWrite(BaseAddr + 0x0E8DB, (void*)&Dc3wy::WdTitleName, 0x04);
             Mem::MemWrite(BaseAddr + 0x0DABF, (void*)&Dc3wy::Description, 0x04);
             Mem::MemWrite(BaseAddr + 0x9DF58, Dc3wy::ChapterTitles, sizeof(Dc3wy::ChapterTitles));
-            Mem::MemWrite(BaseAddr + 0x101A5, &Dc3wy::subtitle::PtrSubWndProc, 0x04);
+            //Mem::MemWrite(BaseAddr + 0x101A5, &Dc3wy::subtitle::PtrSubWndProc, 0x04);
             Mem::JmpWrite(BaseAddr + 0x31870, (intptr_t)&Dc3wy::jmp_audio_play_hook);
             Mem::JmpWrite(BaseAddr + 0x32490, (intptr_t)&Dc3wy::jmp_audio_stop_hook);
 
 			//hook一个可以获取d3d驱动的位置
+			//这里只是启动获取窗口hwnd
 			AsmHelper asms;
 			asms.add_pushad({ 0x50 });  //pushad, push eax
 			asms.add_jmp(0xe8, &Fun::GetD3Deice); //call xx
@@ -228,9 +386,13 @@ namespace Hook {
 			if (!asms.HookForMe(0xe9, BaseAddr + 0x3077A)) {
 				printf("GetD3Deice() hook faild!\n");
 			}
-			//cacheA = Mem::CreateBuffCall({ 0x50 }, &Fun::GetD3Deice, { 0xff, 0xd2,0x8b, 0x46, 0x20 }, BaseAddr + 0x3077F);
-			//Mem::JmpWrite(BaseAddr + 0x3077A, (uintptr_t)cacheA->data());
 
+			//AsmHelper asmLoop;
+			//asmLoop.add_cmd({0x60});  //pushad
+			//asmLoop.add_jmp(0xe8, &Fun::MessageLoop); //call func
+			//asmLoop.add_popad({ 0x50, 0xff, 0xd6, 0x85, 0xc0 }); //popad, push eax, call esi, test eax,eax
+			//asmLoop.add_jmp(0xe9, (void*)(BaseAddr + 0x1095E));//jmp back
+			//asmLoop.HookForMe(0xe9, BaseAddr + 0x10959);
         }
     }
 

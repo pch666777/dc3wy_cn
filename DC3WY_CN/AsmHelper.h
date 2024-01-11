@@ -1,8 +1,12 @@
 ﻿#pragma once
+#ifndef __ASMHELPER_H__
+#define __ASMHELPER_H__
 #include <stdint.h>
 #include <vector>
 #include <Windows.h>
 //为了更好的生成二进制文件
+
+
 
 typedef std::vector<uint8_t> u8vec;
 
@@ -54,3 +58,4 @@ private:
 	std::vector<AsmElement*> elmList;
 };
 
+#endif // !__ASMHELPER_H__

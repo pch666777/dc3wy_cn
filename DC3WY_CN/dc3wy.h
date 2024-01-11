@@ -1,5 +1,12 @@
 ﻿#pragma once
+
+#ifndef __DC3WH_H__
+#define __DC3WH_H__
+
+
+
 #define N "\n"
+
 
 namespace Dc3wy {
 	
@@ -8,6 +15,8 @@ namespace Dc3wy {
 	extern void jmp_hook_init(intptr_t);
 	namespace subtitle {
 		extern intptr_t PtrSubWndProc;
+		extern HWND mainWindow;
+		extern double hasPlayTime;
 		extern void init(HWND);
 		extern void destroy();
 	}
@@ -214,3 +223,4 @@ namespace Dc3wy {
 	};
 }
 #undef N
+#endif // !__DC3WH_H__

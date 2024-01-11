@@ -85,6 +85,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>gdiplus.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
       <Command>copy H:\MyCode1\DC3WY\DC3WY_CN\Debug\DC3WY_CN.dll H:\games\DC系列\DC3WY\DC3WY_CN.dll</Command>
@@ -149,10 +150,6 @@
       <EnableUAC>false</EnableUAC>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClInclude Include="dc3wy.h" />
-    <ClInclude Include="detours.h" />
-  </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AsmHelper.cpp" />
     <ClCompile Include="dc3wy.cpp" />

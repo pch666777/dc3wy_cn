@@ -2,7 +2,11 @@
 #include <thread>
 #include <windows.h>
 #include <dsound.h>
+#include <gdiplus.h>
+#include <string>
 #include "dc3wy.h"
+
+using namespace Gdiplus;
 
 namespace Dc3wy::subtitle {
 
@@ -14,7 +18,10 @@ namespace Dc3wy::subtitle {
     static double playedTime = 0.0l;
     static HWND hStaticText;
 
-
+	std::unique_ptr<SolidBrush> brush;
+	std::unique_ptr<Font> font;
+	HWND mainWindow;
+	double hasPlayTime = 0.0;
 
     static LRESULT CALLBACK ChildWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         switch (message) {
@@ -46,6 +53,7 @@ namespace Dc3wy::subtitle {
             break;
         }
         case WM_PAINT: {
+			break;
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hWnd, &ps);
             // 设置文本颜色
@@ -83,7 +91,7 @@ namespace Dc3wy::subtitle {
 
     LRESULT CALLBACK SubWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         if (message == WM_CREATE) { 
-            Dc3wy::subtitle::SubtitleWnd = hWnd;
+            //Dc3wy::subtitle::SubtitleWnd = hWnd;
             WNDCLASS childWndClass = { 0 };
             childWndClass.lpfnWndProc = ChildWndProc;
             childWndClass.hInstance = GetModuleHandle(NULL);
@@ -133,12 +141,20 @@ namespace Dc3wy::subtitle {
     }
     
     static void init(intptr_t base) {
-        Dc3wy::subtitle::PtrSubWndProc = (intptr_t)SubWndProc;
-        Dc3wy::subtitle::MainWndProc = (WndProc)(base + 0x0FC20);
+        //Dc3wy::subtitle::PtrSubWndProc = (intptr_t)SubWndProc;
+        //Dc3wy::subtitle::MainWndProc = (WndProc)(base + 0x0FC20);
     }
 
     static void run() {
         if(!pDsBuffer) return;
+
+		//准备gdi+绘图s
+		//HDC hdc = GetDC(mainWindow);
+		//std::unique_ptr<Graphics> graphics;
+		//if (hdc) {
+		//	graphics.reset(new Graphics(hdc));
+		//}
+
         WAVEFORMATEX format{};
         pDsBuffer->GetFormat(&format, sizeof(WAVEFORMATEX), NULL);
         // 计算采样率和帧大小
@@ -151,10 +167,25 @@ namespace Dc3wy::subtitle {
             pDsBuffer->GetCurrentPosition(&playCursor, &writeCursor);
             DWORD playedSamples = (playCursor * 8) / (channels * bytesPerSample);
             playedTime = static_cast<double>(playedSamples) / static_cast<double>(samplesPerSecond);
-            PostMessageA(SubtitleWnd, 114514, NULL, NULL);
-            printf("\r[In SubWndProc] PlayedTime: %f", playedTime / 10);
+            //PostMessageA(SubtitleWnd, 114514, NULL, NULL);
+
+			//先用空笔刷填充
+			//Rect re = { 20, 20, 100, 50 };
+			//graphics->FillRectangle(emptybrush.get(), re);
+			//graphics->Clear(Color(0, 0, 0, 0));
+
+			//std::wstring sst = std::to_wstring(playedTime / 10);
+			////draw it
+			//PointF rect = { 20,20 };
+			//INT len = sst.length();
+			//auto ret = graphics->DrawString(sst.c_str(), len, font.get(), rect, brush.get());
+			int ret = 0;
+			hasPlayTime = playedTime / 10;
+            //printf("\r[In SubWndProc] PlayedTime: %f,draw state %d", , ret);
+
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
+		hasPlayTime = 0.0;
         printf("\n\n");
     }
 
@@ -237,7 +268,14 @@ namespace Dc3wy {
         Dc3wy::sub32000 = (Sub32000)(base + 0x32000);
         Dc3wy::dword_a95a4 = base + 0xA95A4;
         Dc3wy::dword_a95ec = base + 0xA95EC;
-        subtitle::init(base);
+        /*subtitle::init(base);*/
+
+		//if (GdiplusStartup(&Dc3wy::subtitle::gdiplusToken, &Dc3wy::subtitle::gdiplusStartupInput, NULL) == Gdiplus::Status::Ok) {
+		//	printf("gdi+ init sucess!\n");
+		//	if (!Dc3wy::subtitle::font) Dc3wy::subtitle::font.reset(new Font(L"Arial", 24, FontStyleBold));
+		//	if (!Dc3wy::subtitle::brush) Dc3wy::subtitle::brush.reset(new SolidBrush(Color(128, 255, 0, 0)));
+		//}
+		//else printf("gdi+ init faild-.-\n");
     }
     
 }
